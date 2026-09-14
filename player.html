@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HD-Artist</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root { --accent: #ff4081; --bg: #ffffff; --surface: #fafafa; --on-surface: #212121; --text: black; }
+        [data-theme="dark"] {  --bg: #121212; --surface: #1e1e1e; --on-surface: #e0e0e0; --text: white; }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Roboto', sans-serif; background-color: var(--bg); color: var(--on-surface); display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; color: var(--text) }
+        /* === СТИЛИЗАЦИЯ СКРОЛЛБАРА ПОД ЦВЕТ АКЦЕНТА === */
+ 
+/* 1. Сам ползунок (thumb) - та часть, которую мы тянем */
+body::-webkit-scrollbar-thumb {
+    background-color: var(--accent); /* Берет цвет из вашей переменной --accent */
+    border-radius: 8px;
+    transition: background-color 0.3s ease-in-out; /* Плавная смена цвета при смене темы */
+}
+
+/* Эффект при наведении на ползунок */
+body::-webkit-scrollbar-thumb:hover {
+    opacity: 0.8;
+}
+
+/* 2. Трек скроллбара (track) - фон под ползунком */
+body::-webkit-scrollbar-track {
+    background: #f1f1f1; /* Светло-серый фон [data-theme="light"] */
+    border-radius: 8px;
+    transition: background-color 0.3s ease-in-out;
+}
+
+/* Темная тема для трека */
+[data-theme="dark"] body::-webkit-scrollbar-track {
+    background: #2a2a2c;
+}
+
+/* 3. Ширина всего скроллбара */
+body::-webkit-scrollbar {
+    width: 12px; /* Толщина полосы */
+}
+        /* === HEADER === */
+        .app-bar { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 50px; background: var(--surface); position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #eee; }
+        .brand { font-size: 22px; font-weight: 500; color: var(--accent); }
+        .header-right { display: flex; align-items: center; gap: 15px; position: relative; }
+        .profile-btn { background: none; border: none; cursor: pointer; font-size: 16px; display: flex; align-items: center; gap: 6px; }
+        .red-dot { width: 8px; height: 8px; background: red; border-radius: 50%; position: absolute; top: 4px; right: -4px; display: none; }
+        .menu-dropdown { position: absolute; top: 50px; right: 20px; background: var(--surface); border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); padding: 10px 0; min-width: 180px; display: none; flex-direction: column; z-index: 20; }
+        .menu-dropdown a { padding: 12px 20px; text-decoration: none; color: var(--on-surface); font-size: 15px; display: block; transition: background 0.2s; }
+        .menu-dropdown a:hover { background: var(--bg); color: var(--text); }
+        
+        .settings-popup { position: fixed; top: 70px; right: 20px; background: var(--surface); border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); padding: 20px; width: 320px; z-index: 30; display: none; flex-direction: column; gap: 15px; animation: fadeIn 0.2s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* === MAIN CONTENT (Full Width List) === */
+        .main-wrapper { flex: 1; display: flex; overflow: hidden; }
+        
+        .playlist-sidebar { 
+            width: 320px; 
+            background: var(--surface); 
+            border-right: 1px solid #eee; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            overflow-y: auto; 
+            max-height: calc(100vh - 50px);
+        }
+        .search-box { position: relative; margin-bottom: 15px; background: var(--bg) }
+        .search-box input { width: 100%; padding: 12px 40px 12px 15px; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 14px; }
+        .search-box span { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #999; font-size: 18px; }
+        
+        .song-list-container { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding-right: 10px; 
+            scroll-behavior: smooth;
+        }
+        .song-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr; gap:10px; }
+        .song-item { display: flex; align-items: center; padding: 15px; border-radius: 12px; cursor: pointer; transition: all 0.2s; background: transparent; border: 1px solid transparent; width: calc(100% - 30px);  }
+        .song-item.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .song-item:hover:not(.active) { background: #f8f8f8; transform: translateX(4px); }
+        [data-theme="dark"] .song-item:hover:not(.active) { background: #2a2a2a; }
+        .cover-sm {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, var(--accent), #ad2bee);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center; 
+    font-weight: bold; color: white; flex-shrink: 0; margin-right: 15px; font-size: 12px;
+    
+    /* ПЛАВНАЯ АНИМАЦИЯ СМЕНЫ ЦВЕТА */
+    transition: background-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+/* Чтобы полоса прогресса тоже меняла цвет плавно */
+.progress-filled {
+    height: 100%; width: 0%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: background-color 0.3s ease-in-out;
+}
+        .song-info h4 { margin: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .song-info p { margin: 2px 0 0 0; font-size: 12px; color: #777; }
+        [data-theme="dark"] .song-info p { color: #aaa; }
+        
+        /* Кнопка сброса поиска */
+        .clear-search { text-align: center; padding: 10px; color: var(--accent); font-size: 14px; cursor: pointer; text-decoration: underline; display: none; }
+        
+        /* === PLAYER BAR (Bottom Compact) — Теперь всегда внизу === */
+        .fixed-player { 
+            height: 70px; 
+            background: var(--surface); 
+            border-top: 1px solid #eee; 
+            padding: 0 20px; 
+            display: flex; 
+            align-items: center; 
+            gap: 20px;
+            position: fixed; /* Главное изменение: фиксируем позицию */
+            bottom: 0;       /* Прижимаем к нижнему краю */
+            right: 0;
+            width: calc(100% - 320px); /* Ширина под сайдбаром */
+            z-index: 15;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        }
+        .track-text { flex: 1; min-width: 0; }
+        .np-title { font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+        .np-artist { font-size: 13px; color: #757575; margin: 0; }
+        .progress-row { width: 100%; display: flex; align-items: center; gap: 12px; margin: 4px 0; }
+        .progress-time { font-size: 11px; color: #757575; min-width: 30px; text-align: center; }
+        .progress-bar { flex: 1; height: 4px; background: #e0e0e0; border-radius: 2px; cursor: pointer; }
+        
+        .controls-group { display: flex; align-items: center; gap: 16px; }
+        .ctrl-btn { background: none; border: none; cursor: pointer; font-size: 24px; color: #757575; padding: 4px; }
+        .ctrl-btn.main { font-size: 32px; color: var(--accent); }
+        .volume-wrap { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+        .volume-range { width: 100px; height: 4px; -webkit-appearance: none; appearance: none; background: #e0e0e0; border-radius: 2px; }
+        .volume-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; background: var(--accent); border-radius: 50%; cursor: pointer; }
+
+        /* Modals Fullscreen fix */
+        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: var(--surface); padding: 30px; border-radius: 16px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; position: relative; }
+        .close-modal { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; cursor: pointer; color: #777; }
+    </style>
+</head>
+<body data-theme="light">
+
+    <!-- Header -->
+    <div class="app-bar">
+        <div class="brand">HD-Artist</div>
+        <div class="header-right">
+            <button id="settingsBtn" style="background:none;border:none;font-size:20px;cursor:pointer;">⚙️</button>
+            <div class="profile-btn" id="profileBtn">
+    <div style="text-align: right;">
+        <span id="profileName" style="font-size: 14px; font-weight: 500;"></span>
+        <div id="timerDisplay" style="font-size: 10px; color: #999; line-height: 1;"></div>
+    </div>
+    <span class="red-dot" id="expiryDot"></span>
+</div>
+            <div class="menu-dropdown" id="dropdownMenu">
+                <a href="#" onclick="showAbout()">О сервисе</a>
+                <a href="#" onclick="logout()">Выход</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Popup -->
+    <div class="settings-popup" id="settingsPopup">
+	<hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+<p style="margin:5px 0; font-size:13px; text-align:center;">Управление доступом:</p>
+<button style="width: 100%; padding: 10px; background:#2e7d32;color:white;border:none;border-radius:8px;" onclick="changeAccessCode()">Продлить подписку (сменить код)</button>
+        <h3 style="margin:0 0 10px 0;">Настройки</h3>
+        <label><input type="radio" name="theme" value="light" checked> Светлая тема</label><br>
+        <label><input type="radio" name="theme" value="dark"> Темная тема</label>
+        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+        <!-- ЦВЕТ АКЦЕНТА В НАСТРОЙКАХ -->
+<p style="margin:5px 0; font-size:14px;"><strong>Цвет акцента:</strong></p>
+<div style="display:flex; gap:10px;">
+    <span class="color-opt" data-c="#ff4081" style="background:#ff4081;width:24px;height:24px;border-radius:6px;cursor:pointer;border:2px solid transparent;" onclick="selectAccentColor(this)"></span>
+    <span class="color-opt" data-c="#4caf50" style="background:#4caf50;width:24px;height:24px;border-radius:6px;cursor:pointer;border:2px solid transparent;" onclick="selectAccentColor(this)"></span>
+    <span class="color-opt" data-c="#2196f3" style="background:#2196f3;width:24px;height:24px;border-radius:6px;cursor:pointer;border:2px solid transparent;" onclick="selectAccentColor(this)"></span>
+    <span class="color-opt" data-c="#ff9800" style="background:#ff9800;width:24px;height:24px;border-radius:6px;cursor:pointer;border:2px solid transparent;" onclick="selectAccentColor(this)"></span>
+</div>
+        <button style="margin-top:15px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;width:100%;cursor:pointer;" onclick="saveSettings()">Сохранить</button>
+    </div>
+
+    <!-- Main Area -->
+    <div class="main-wrapper">
+        <!-- Left Sidebar -->
+        <aside class="playlist-sidebar">
+            <div class="search-box"><span class="material-icons">🔍</span><input type="text" id="sidebarSearch" placeholder="Поиск..."></div>
+            <div class="clear-search" id="clearSearch">Показать все треки</div>
+            <div class="song-list-container">
+                <ul class="song-list" id="songList"></ul>
+            </div>
+        </aside>
+        
+        <!-- Right Content Placeholder -->
+        <main style="flex:1; padding:40px; background: var(--bg); color: var(--text); overflow:auto;">
+            <h1>Добро пожаловать!</h1>
+            <p>Выберите трек в меню слева.</p>
+        </main>
+    </div>
+
+    <!-- Bottom Player (Fixed) -->
+    <div class="fixed-player">
+        <div class="track-text">
+            <p class="np-title" id="npTitle">Название трека</p>
+            <p class="np-artist" id="npArtist">Исполнитель</p>
+            <div class="progress-row">
+                <span class="progress-time" id="currentTimeSm">0:00</span>
+                <div class="progress-bar" id="progressBarSm"><div class="progress-filled" id="progressFilledSm"></div></div>
+                <span class="progress-time" id="durationSm">0:00</span>
+            </div>
+        </div>
+        <div class="controls-group">
+            <button class="ctrl-btn" id="prevBtnSm">◀◀</button>
+            <button class="ctrl-btn main" id="playPauseBtnSm">▶️</button>
+            <button class="ctrl-btn" id="nextBtnSm">▶▶</button>
+			<button class="ctrl-btn" onclick="
+    const link = document.createElement('a');
+    link.href = audio.src;
+    link.download = ''; 
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);">⇲</button>
+        </div>
+        <div class="volume-wrap"><span>🔊</span><input type="range" class="volume-range" id="volumeSliderSm" min="0" max="1" step="0.01" value="0.8"></div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-backdrop" id="aboutModal"><div class="modal-content"><button class="close-modal" onclick="closeAllModals()">×</button><h3>О HappyDay Artist</h3><p>Персональный плеер для доступа к музыке.<br>Версия: 26.9.14.1</p></div></div>
+
+    <script>
+    function getInitials(filename) {
+        const name = filename.replace(/\.mp3|\.wav/gi, '').split(' ').filter(w => w.length > 0);
+        return name.map(n => n[0].toUpperCase()).join('');
+    }
+
+    let userData = JSON.parse(localStorage.getItem('hd_artist_user'));
+    if (!userData) window.location.href = 'index.html';
+
+    // Глобальная переменная интервала (фикс ошибки ReferenceError)
+    let timerInterval = null;
+
+    const profileName = document.getElementById('profileName');
+    const expiryDot = document.getElementById('expiryDot');
+    const dropdownMenu = document.getElementById('dropdownMenu');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPopup = document.getElementById('settingsPopup');
+    
+    const progressBarSm = document.getElementById('progressBarSm');
+    const progressFilledSm = document.getElementById('progressFilledSm');
+    const currentTimeSm = document.getElementById('currentTimeSm');
+    const durationSm = document.getElementById('durationSm');
+    const playPauseBtnSm = document.getElementById('playPauseBtnSm');
+    const prevBtnSm = document.getElementById('prevBtnSm');
+    const nextBtnSm = document.getElementById('nextBtnSm');
+    const volumeSliderSm = document.getElementById('volumeSliderSm');
+    const npTitle = document.getElementById('npTitle');
+    const npArtist = document.getElementById('npArtist');
+    const songList = document.getElementById('songList');
+    const sidebarSearch = document.getElementById('sidebarSearch');
+    const clearSearch = document.getElementById('clearSearch');
+    const timerDisplay = document.getElementById('timerDisplay'); // Элемент под именем
+
+    applyUserSettings();
+    updateProfileHeader();
+
+    const songs = [
+        "Chess_Remaked_LVGB.mp3", "joyful - chess (LVGB Edit).mp3", "LVGB - A stray cat.MP3", "LVGB - Autumn.mp3", "LVGB - Back to Disco.MP3", 
+        "LVGB - BeatTime.wav", "LVGB - Cats Are Cute.mp3", "LVGB - Dance Monkey (remaked).mp3", "LVGB - Dance Time.mp3", "LVGB - Danger, Acid!.mp3", 
+        "LVGB - Dark Space.MP3", "LVGB - Echoes of Love.mp3", "LVGB - Eternal Soul (Remix).mp3", "LVGB - Georgian Disco.mp3", "LVGB - Heavenly Joy.MP3", 
+        "LVGB - Kind©(For Intro).MP3", "LVGB - Nyan Cat (Remix).mp3", "LVGB - Pink Clouds.MP3", "LVGB - Sleep (Full).MP3", "LVGB - Sometimes.MP3", 
+        "LVGB - Winter.MP3", "LVGB - Гимн Понедельника..mp3", "LVGB - Школьные годы (Версия 2).mp3", "LVGB -Spies on Mission.mp3", 
+        "Song From A Secret Garden (LVGB Remix).mp3", "Tetris(Remix by LVGB).MP3", "Дюна - Привет с большого бодуна (LVGB Remix).mp3", "Лев Гнилозуб - Лето (Фонограмма от LVGB).MP3"
+    ];
+
+    const meta = {
+        "Chess_Remaked_LVGB.mp3": ["CHESS", "LVGB"],
+        "LVGB - A stray cat.MP3": ["A Stray Cat", "LVGB"],
+        "LVGB - Autumn.mp3": ["Autumn", "LVGB"],
+        "LVGB - Back to Disco.MP3": ["Back to Disco", "LVGB"],
+        "LVGB - BeatTime.wav": ["BeatTime", "LVGB"],
+        "LVGB - Cats Are Cute.mp3": ["Cats Are Cute", "LVGB"],
+        "LVGB - Dance Monkey (remaked).mp3": ["Dance Monkey", "LVGB"],
+        "LVGB - Dance Time.mp3": ["Dance Time", "LVGB"],
+        "LVGB - Danger, Acid!.mp3": ["Danger, Acid!", "LVGB"],
+        "LVGB - Dark Space.MP3": ["Dark Space", "LVGB"],
+        "LVGB - Echoes of Love.mp3": ["Echoes of Love", "LVGB"],
+        "LVGB - Eternal Soul (Remix).mp3": ["Eternal Soul", "LVGB"],
+        "LVGB - Georgian Disco.mp3": ["Georgian Disco", "LVGB"],
+        "LVGB - Heavenly Joy.MP3": ["Heavenly Joy", "LVGB"],
+        "LVGB - Kind©(For Intro).MP3": ["Kind", "LVGB"],
+        "LVGB - Nyan Cat (Remix).mp3": ["Nyan Cat", "LVGB"],
+        "LVGB - Pink Clouds.MP3": ["Pink Clouds", "LVGB"],
+        "LVGB - Sleep (Full).MP3": ["Sleep", "LVGB"],
+        "LVGB - Sometimes.MP3": ["Sometimes", "LVGB"],
+        "LVGB - Winter.MP3": ["Winter", "LVGB"],
+        "LVGB - Гимн Понедельника..mp3": ["Гимн Понедельника", "LVGB"],
+        "LVGB - Школьные годы (Версия 2).mp3": ["Школьные годы", "LVGB"],
+        "LVGB -Spies on Mission.mp3": ["Spies on Mission", "LVGB"],
+        "Song From A Secret Garden (LVGB Remix).mp3": ["Secret Garden", "LVGB"],
+        "Tetris(Remix by LVGB).MP3": ["Tetris", "LVGB"],
+        "Дюна - Привет с большого бодуна (LVGB Remix).mp3": ["Привет с большого бодуна", "Дюна"],
+        "Лев Гнилозуб - Лето (Фонограмма от LVGB).MP3": ["Лето", "Лев Гнилозуб"]
+    };
+
+    let audio = null;
+    let currentTrackIndex = 0;
+
+    renderList();
+
+    function getSrcPath(filename) { return `music/${filename}`; }
+
+    async function loadTrack(index) {
+        if (audio) { try { audio.pause(); } catch(e) {} URL.revokeObjectURL(audio.src); }
+        currentTrackIndex = index;
+        const fileName = songs[index];
+        
+        audio = new Audio(getSrcPath(fileName));
+        audio.volume = parseFloat(volumeSliderSm.value);
+        
+        audio.onloadedmetadata = () => { durationSm.textContent = formatTime(audio.duration); updateProgress(); };
+        audio.ontimeupdate = updateProgress;
+        audio.onended = playNext;
+        
+        playPauseBtnSm.textContent = '❚❚';
+        npTitle.textContent = meta[fileName]?.[0] || fileName.replace(/\.[^/.]+$/, '');
+        npArtist.textContent = meta[fileName]?.[1] || 'Unknown Artist';
+        
+        document.querySelectorAll('.song-item').forEach(el => el.classList.remove('active'));
+        if(songList.children[index]) songList.children[index].classList.add('active');
+        
+        await audio.play().catch(()=>{});
+    }
+
+    function playPause() { if(!audio) loadTrack(currentTrackIndex); else { audio.paused ? audio.play() : audio.pause(); playPauseBtnSm.textContent = audio.paused ? '▶️' : '❚❚'; } }
+    function playPrev() { currentTrackIndex = (currentTrackIndex - 1 + songs.length) % songs.length; loadTrack(currentTrackIndex); }
+    function playNext() { currentTrackIndex = (currentTrackIndex + 1) % songs.length; loadTrack(currentTrackIndex); }
+
+    function updateProgress() { if(!audio) return; const percent = (audio.currentTime / audio.duration) * 100; progressFilledSm.style.width = `${percent}%`; currentTimeSm.textContent = formatTime(audio.currentTime); }
+    
+    // Перемотка прогресс-бара (Исправлено использование this и offsetWidth)
+    progressBarSm.addEventListener('click', function(e) {
+        if (!audio || isNaN(audio.duration)) return;
+        const rect = this.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const percent = clickX / this.offsetWidth;
+        audio.currentTime = percent * audio.duration;
+        updateProgress(); 
+    });
+
+    volumeSliderSm.oninput = ()=>{ if(audio) audio.volume = volumeSliderSm.value; }
+
+    function formatTime(s){ if(isNaN(s)) return "0:00"; const m=Math.floor(s/60); const sec=Math.floor(s%60).toString().padStart(2,'0'); return `${m}:${sec}`; }
+
+   function renderList(filter = '') {
+    songList.innerHTML = '';
+    
+    if (!filter) {
+        clearSearch.style.display = 'none';
+    } else {
+        clearSearch.style.display = 'block';
+    }
+
+    const filteredSongs = filter ? songs.filter(s => s.toLowerCase().includes(filter.toLowerCase())) : songs;
+
+    if (filteredSongs.length === 0 && filter) {
+        const li = document.createElement('li');
+        li.className = 'song-item';
+        li.textContent = 'Ничего не найдено';
+        songList.appendChild(li);
+        return;
+    }
+
+    filteredSongs.forEach((file, idx) => {
+        const originalIndex = songs.indexOf(file);
+        
+        const li = document.createElement('li');
+        li.className = 'song-item';
+        
+        const cover = document.createElement('div'); cover.className='cover-sm'; cover.textContent=getInitials(file);
+        const info = document.createElement('div'); info.className='song-info';
+        const title = document.createElement('h4'); title.textContent=meta[file]?.[0]||file.replace(/\.[^/.]+$/,'').replace(/-/g, ' ');
+        const artist = document.createElement('p'); artist.textContent=meta[file]?.[1]||'LVGB';
+        
+        info.append(title, artist); li.append(cover, info);
+        
+        li.onclick = () => loadTrack(originalIndex);
+        
+        songList.appendChild(li);
+    });
+}
+
+    function logout(){ localStorage.removeItem('hd_artist_user'); window.location.href='index.html'; }
+    function showAbout(){ document.getElementById('aboutModal').style.display='flex'; }
+   // Глобальная переменная для хранения выбранного цвета ДО нажатия "Сохранить"
+let pendingAccentColor = userData.accentColor;
+
+function selectAccentColor(element) {
+    // Снимаем рамку со всех
+    document.querySelectorAll('.color-opt').forEach(opt => opt.style.borderColor = 'transparent');
+    // Ставим рамку на выбранный
+    element.style.borderColor = '#555';
+    
+    // Сохраняем во временную переменную
+    pendingAccentColor = element.dataset.c;
+}
+
+function openSettings() { 
+    settingsPopup.style.display='flex'; 
+    
+    // Устанавливаем галочку темы
+    document.querySelector(`input[name="theme"][value="${userData.theme}"]`).checked=true;
+    
+    // Выделяем текущий цвет рамки при открытии окна
+    const currentOpt = document.querySelector(`.color-opt[data-c="${userData.accentColor}"]`);
+    if(currentOpt) {
+        currentOpt.style.borderColor = '#555';
+    }
+    
+    // Синхронизируем временную переменную с текущей темой
+    pendingAccentColor = userData.accentColor;
+}
+
+function saveSettings(){
+    // Обновляем данные пользователя
+    userData.theme = document.querySelector('input[name="theme"]:checked').value;
+    userData.accentColor = pendingAccentColor; // Берем значение из временной переменной
+    
+    localStorage.setItem('hd_artist_user', JSON.stringify(userData)); 
+    
+    applyUserSettings(); // Применяем изменения к странице
+    closeAllModals();
+}
+
+function applyUserSettings(){ 
+    document.documentElement.style.setProperty('--accent', userData.accentColor); 
+    document.body.dataset.theme=userData.theme; 
+}
+    function closeAllModals(){ document.querySelectorAll('.modal-backdrop').forEach(m=>m.style.display='none'); settingsPopup.style.display='none'; }
+    
+    function applyUserSettings(){ document.documentElement.style.setProperty('--accent', userData.accentColor); document.body.dataset.theme=userData.theme; }
+
+    /* === НОВЫЕ ФУНКЦИИ ДЛЯ ТАЙМЕРА И КОДА === */
+    
+    function calculateTimeLeft() {
+        const expiresDate = new Date(userData.expires);
+        const now = new Date();
+        let diff = expiresDate - now;
+
+        if (diff <= 0) {
+            timerDisplay.textContent = 'Срок истек';
+            expiryDot.style.display = 'block';
+            return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        diff -= days * (1000 * 60 * 60 * 24);
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        diff -= hours * (1000 * 60 * 60);
+        const mins = Math.floor(diff / (1000 * 60));
+        diff -= mins * (1000 * 60);
+        const secs = Math.floor(diff / 1000);
+
+        if (days <= 3 && days > 0) {
+            expiryDot.style.display = 'block';
+        } else {
+            expiryDot.style.display = 'none';
+        }
+
+        let displayText = '';
+        if (days > 0) displayText += `${String(days).padStart(2, '0')}д `;
+        displayText += `${String(hours).padStart(2, '0')}:`;
+        displayText += `${String(mins).padStart(2, '0')}:`;
+        displayText += `${String(secs).padStart(2, '0')}`;
+
+        timerDisplay.textContent = `Осталось: ${displayText}`;
+    }
+
+    function updateProfileHeader() { 
+        profileName.textContent = userData.name; 
+        
+        // Очищаем старый интервал перед созданием нового
+        if (timerInterval) clearInterval(timerInterval);
+        
+        calculateTimeLeft();
+        
+        // Запускаем обновление каждую секунду
+        timerInterval = setInterval(() => {
+            calculateTimeLeft();
+        }, 1000);
+    }
+
+    function changeAccessCode() {
+        const newCodeInput = prompt("Введите новый 6-значный код доступа:");
+        
+        if (!newCodeInput || !/^\d{6}$/.test(newCodeInput)) {
+            alert('Код должен состоять ровно из 6 цифр.');
+            return;
+        }
+        
+        const newExpires = new Date();
+        newExpires.setDate(newExpires.getDate() + 30);
+        
+        userData.code = newCodeInput;
+        userData.expires = newExpires.toISOString();
+        
+        localStorage.setItem('hd_artist_user', JSON.stringify(userData));
+        
+        alert('Код изменен! Подписка продлена на 30 дней.\nНовые коды доступны на странице входа.');
+        closeAllModals();
+        updateProfileHeader(); 
+    }
+
+    // EVENT LISTENERS
+    playPauseBtnSm.onclick=playPause; prevBtnSm.onclick=playPrev; nextBtnSm.onclick=playNext;
+    profileBtn.onclick=(e)=>{e.stopPropagation(); dropdownMenu.style.display=dropdownMenu.style.display==='flex'?'none':'flex';}
+    settingsBtn.onclick=(e)=>{e.stopPropagation(); settingsPopup.style.display=settingsPopup.style.display==='flex'?'none':'flex';}
+    
+    window.onclick=(e)=>{
+        if(!e.target.closest('.profile-btn')) dropdownMenu.style.display='none'; 
+        if(!e.target.closest('.settings-popup') && e.target.id!=='settingsBtn') settingsPopup.style.display='none'; 
+        if(!e.target.closest('.modal-content') && e.target.classList.contains('modal-backdrop')) closeAllModals(); 
+    }
+    
+    sidebarSearch.oninput=(e)=>renderList(e.target.value);
+    clearSearch.onclick = () => { sidebarSearch.value = ''; renderList(); };
+
+    // Слушатель кнопки смены кода ВНУТРИ настроек
+    // Добавьте кнопку в HTML внутрь .settings-popup: <button onclick="changeAccessCode()">Продлить подписку</button>
+    
+    loadTrack(0);
+</script>
+</body>
+</html>
